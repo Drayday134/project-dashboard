@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Browser - Workhorse2025</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f7fa; color: #333; }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 40px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .header-content { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 24px; }
+        .header-buttons { display: flex; gap: 10px; }
+        .header-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 8px 20px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 5px;
+            text-decoration: none;
+            transition: background 0.3s;
+        }
+        .header-btn:hover { background: rgba(255, 255, 255, 0.3); }
+        .container { max-width: 1400px; margin: 0 auto; padding: 30px 40px; }
+        .breadcrumb {
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .breadcrumb-item { color: #667eea; text-decoration: none; font-weight: 500; cursor: pointer; }
+        .breadcrumb-item:hover { text-decoration: underline; }
+        .breadcrumb-item.current { color: #333; cursor: default; }
+        .breadcrumb-separator { color: #999; }
+        .file-list { background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05); overflow: hidden; }
+        .file-list-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            display: grid;
+            grid-template-columns: 40px 1fr 120px 180px;
+            gap: 15px;
+            font-weight: 600;
+            font-size: 14px;
+            color: #666;
+        }
+        .file-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            display: grid;
+            grid-template-columns: 40px 1fr 120px 180px;
+            gap: 15px;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .file-item:hover { background: #f8f9fa; }
+        .file-item:last-child { border-bottom: none; }
+        .file-icon { font-size: 24px; text-align: center; }
+        .file-name { font-weight: 500; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .file-size { color: #666; font-size: 14px; }
+        .file-modified { color: #999; font-size: 13px; }
+        .loading { text-align: center; padding: 60px 20px; color: #666; }
+        .loading-spinner {
+            width: 50px; height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0; top: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+        }
+        .modal.active { display: flex; justify-content: center; align-items: center; }
+        .modal-content {
+            background: white;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 1000px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-title { font-size: 18px; font-weight: 600; color: #333; flex: 1; }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+            padding: 0;
+            width: 30px; height: 30px;
+        }
+        .modal-close:hover { color: #333; }
+        .modal-body { padding: 20px; overflow: auto; flex: 1; }
+        .file-content {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .file-info { background: #e3f2fd; padding: 15px; border-radius: 5px; margin-bottom: 15px; font-size: 14px; }
+        .file-info-item { margin-bottom: 8px; }
+        .file-info-label { font-weight: 600; color: #1976d2; }
+        .error-message { background: #fee; color: #c33; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #fcc; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <h1>File Browser</h1>
+            <div class="header-buttons">
+                <a href="/" class="header-btn">Dashboard</a>
+                <a href="/logout" class="header-btn">Logout</a>
+            </div>
+        </div>
+    </header>
+    <div class="container">
+        <div class="breadcrumb" id="breadcrumb">
+            <a class="breadcrumb-item" onclick="navigateTo('')">Root</a>
+        </div>
+        <div id="error-container"></div>
+        <div class="file-list">
+            <div class="file-list-header">
+                <div></div>
+                <div>Name</div>
+                <div>Size</div>
+                <div>Modified</div>
+            </div>
+            <div id="file-list-body">
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <p>Loading files...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="fileModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title" id="modalTitle">File Viewer</div>
+                <button class="modal-close" onclick="closeModal()">x</button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+        </div>
+    </div>
+    <script>
+        const initialPath = '{{ initial_path }}';
+        let currentPath = initialPath;
+
+        function formatBytes(bytes) {
+            if (bytes === null || bytes === undefined) return '-';
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        function updateBreadcrumb(path) {
+            const breadcrumb = document.getElementById('breadcrumb');
+            const parts = path ? path.split('/') : [];
+            let html = '<a class="breadcrumb-item" onclick="navigateTo(\'\')">Root</a>';
+            let currentPathBuild = '';
+            parts.forEach((part, index) => {
+                if (part) {
+                    currentPathBuild += (currentPathBuild ? '/' : '') + part;
+                    const isLast = index === parts.length - 1;
+                    if (isLast) {
+                        html += `<span class="breadcrumb-separator">/</span><span class="breadcrumb-item current">${part}</span>`;
+                    } else {
+                        html += `<span class="breadcrumb-separator">/</span><a class="breadcrumb-item" onclick="navigateTo('${currentPathBuild}')">${part}</a>`;
+                    }
+                }
+            });
+            breadcrumb.innerHTML = html;
+        }
+
+        function showError(message) {
+            const errorContainer = document.getElementById('error-container');
+            errorContainer.innerHTML = `<div class="error-message">${message}</div>`;
+            setTimeout(() => { errorContainer.innerHTML = ''; }, 5000);
+        }
+
+        async function loadDirectory(path) {
+            currentPath = path;
+            updateBreadcrumb(path);
+            const fileListBody = document.getElementById('file-list-body');
+            fileListBody.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Loading...</p></div>';
+            try {
+                const url = path ? `/api/browse/${path}` : '/api/browse';
+                const response = await fetch(url);
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to load directory');
+                }
+                const data = await response.json();
+                displayFiles(data);
+            } catch (error) {
+                showError(`Error: ${error.message}`);
+                fileListBody.innerHTML = '<div class="loading"><p>Error loading directory</p></div>';
+            }
+        }
+
+        function displayFiles(data) {
+            const fileListBody = document.getElementById('file-list-body');
+            if (data.items.length === 0) {
+                fileListBody.innerHTML = '<div class="loading"><p>Empty directory</p></div>';
+                return;
+            }
+            let html = '';
+            data.items.forEach(item => {
+                const icon = item.type === 'directory' ? '&#128193;' : '&#128196;';
+                const size = item.type === 'directory' ? '-' : formatBytes(item.size);
+                const action = item.type === 'directory' ? `navigateTo('${item.path}')` : `viewFile('${item.path}')`;
+                html += `<div class="file-item" onclick="${action}">
+                    <div class="file-icon">${icon}</div>
+                    <div class="file-name">${item.name}</div>
+                    <div class="file-size">${size}</div>
+                    <div class="file-modified">${item.modified}</div>
+                </div>`;
+            });
+            fileListBody.innerHTML = html;
+        }
+
+        function navigateTo(path) {
+            loadDirectory(path);
+            window.history.pushState({path: path}, '', path ? `/browse/${path}` : '/browse');
+        }
+
+        async function viewFile(filepath) {
+            const modal = document.getElementById('fileModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalBody = document.getElementById('modalBody');
+            modal.classList.add('active');
+            modalTitle.textContent = filepath.split('/').pop();
+            modalBody.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Loading file...</p></div>';
+            try {
+                const response = await fetch(`/api/file/${filepath}`);
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message || data.error || 'Failed to load file');
+                modalBody.innerHTML = `
+                    <div class="file-info">
+                        <div class="file-info-item"><span class="file-info-label">File:</span> ${data.name}</div>
+                        <div class="file-info-item"><span class="file-info-label">Size:</span> ${formatBytes(data.size)}</div>
+                    </div>
+                    <div class="file-content">${escapeHtml(data.content)}</div>`;
+            } catch (error) {
+                modalBody.innerHTML = `<div class="error-message">${error.message}</div>`;
+            }
+        }
+
+        function closeModal() { document.getElementById('fileModal').classList.remove('active'); }
+        function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+        document.getElementById('fileModal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+        document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
+        window.addEventListener('popstate', function(e) { loadDirectory(e.state?.path || initialPath); });
+        loadDirectory(initialPath);
+    </script>
+</body>
+</html>
